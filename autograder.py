@@ -14,12 +14,13 @@
 
 # imports from python standard library
 import grading
-import imp
-import optparse
+import argparse
+import importlib.util
 import os
 import pprint
 import re
 import sys
+import types
 import projectParams
 import random
 random.seed(0)
@@ -30,59 +31,64 @@ except:
 
 # register arguments and set default values
 def readCommand(argv):
-    parser = optparse.OptionParser(
+    parser = argparse.ArgumentParser(
         description='Run public tests on student code')
-    parser.set_defaults(generateSolutions=False, edxOutput=False, gsOutput=False,
-                        muteOutput=False, printTestCase=False, noGraphics=False)
-    parser.add_option('--test-directory',
-                      dest='testRoot',
-                      default='test_cases',
-                      help='Root test directory which contains subdirectories corresponding to each question')
-    parser.add_option('--student-code',
-                      dest='studentCode',
-                      default=projectParams.STUDENT_CODE_DEFAULT,
-                      help='comma separated list of student code files')
-    parser.add_option('--code-directory',
-                      dest='codeRoot',
-                      default="",
-                      help='Root directory containing the student and testClass code')
-    parser.add_option('--test-case-code',
-                      dest='testCaseCode',
-                      default=projectParams.PROJECT_TEST_CLASSES,
-                      help='class containing testClass classes for this project')
-    parser.add_option('--generate-solutions',
-                      dest='generateSolutions',
-                      action='store_true',
-                      help='Write solutions generated to .solution file')
-    parser.add_option('--edx-output',
-                      dest='edxOutput',
-                      action='store_true',
-                      help='Generate edX output files')
-    parser.add_option('--gradescope-output',
-                      dest='gsOutput',
-                      action='store_true',
-                      help='Generate GradeScope output files')
-    parser.add_option('--mute',
-                      dest='muteOutput',
-                      action='store_true',
-                      help='Mute output from executing tests')
-    parser.add_option('--print-tests', '-p',
-                      dest='printTestCase',
-                      action='store_true',
-                      help='Print each test case before running them.')
-    parser.add_option('--test', '-t',
-                      dest='runTest',
-                      default=None,
-                      help='Run one particular test.  Relative to test root.')
-    parser.add_option('--question', '-q',
-                      dest='gradeQuestion',
-                      default=None,
-                      help='Grade one particular question.')
-    parser.add_option('--no-graphics',
-                      dest='noGraphics',
-                      action='store_true',
-                      help='No graphics display for pacman games.')
-    (options, args) = parser.parse_args(argv)
+    parser.add_argument('--test-directory',
+                        dest='testRoot',
+                        default='test_cases',
+                        help='Root test directory which contains subdirectories corresponding to each question')
+    parser.add_argument('--student-code',
+                        dest='studentCode',
+                        default=projectParams.STUDENT_CODE_DEFAULT,
+                        help='comma separated list of student code files')
+    parser.add_argument('--code-directory',
+                        dest='codeRoot',
+                        default="",
+                        help='Root directory containing the student and testClass code')
+    parser.add_argument('--test-case-code',
+                        dest='testCaseCode',
+                        default=projectParams.PROJECT_TEST_CLASSES,
+                        help='class containing testClass classes for this project')
+    parser.add_argument('--generate-solutions',
+                        dest='generateSolutions',
+                        action='store_true',
+                        default=False,
+                        help='Write solutions generated to .solution file')
+    parser.add_argument('--edx-output',
+                        dest='edxOutput',
+                        action='store_true',
+                        default=False,
+                        help='Generate edX output files')
+    parser.add_argument('--gradescope-output',
+                        dest='gsOutput',
+                        action='store_true',
+                        default=False,
+                        help='Generate GradeScope output files')
+    parser.add_argument('--mute',
+                        dest='muteOutput',
+                        action='store_true',
+                        default=False,
+                        help='Mute output from executing tests')
+    parser.add_argument('--print-tests', '-p',
+                        dest='printTestCase',
+                        action='store_true',
+                        default=False,
+                        help='Print each test case before running them.')
+    parser.add_argument('--test', '-t',
+                        dest='runTest',
+                        default=None,
+                        help='Run one particular test.  Relative to test root.')
+    parser.add_argument('--question', '-q',
+                        dest='gradeQuestion',
+                        default=None,
+                        help='Grade one particular question.')
+    parser.add_argument('--no-graphics',
+                        dest='noGraphics',
+                        action='store_true',
+                        default=False,
+                        help='No graphics display for pacman games.')
+    args = argv[1:] if len(argv) > 0 and not str(argv[0]).startswith('-') else argv
+    options = parser.parse_args(args)
     return options
 
 
@@ -106,7 +112,7 @@ def confirmGenerate():
 # however, a readonly attribute.
 def setModuleName(module, filename):
     functionType = type(confirmGenerate)
-    classType = type(optparse.Option)
+    classType = type
 
     for i in dir(module):
         o = getattr(module, i)
@@ -124,20 +130,22 @@ def setModuleName(module, filename):
 #from cStringIO import StringIO
 
 def loadModuleString(moduleSource):
-    # Below broken, imp doesn't believe its being passed a file:
-    #    ValueError: load_module arg#2 should be a file or None
-    #
-    #f = StringIO(moduleCodeDict[k])
-    #tmp = imp.load_module(k, f, k, (".py", "r", imp.PY_SOURCE))
-    tmp = imp.new_module(k)
-    exec(moduleCodeDict[k], tmp.__dict__)
-    setModuleName(tmp, k)
+    moduleName = '__module_from_string__'
+    tmp = types.ModuleType(moduleName)
+    exec(moduleSource, tmp.__dict__)
+    setModuleName(tmp, moduleName)
     return tmp
 
 
 def loadModuleFile(moduleName, filePath):
-    with open(filePath, 'r') as f:
-        return imp.load_module(moduleName, f, "%s.py" % moduleName, (".py", "r", imp.PY_SOURCE))
+    spec = importlib.util.spec_from_file_location(moduleName, filePath)
+    if spec is None or spec.loader is None:
+        raise ImportError('Could not load module %s from %s' % (moduleName, filePath))
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[moduleName] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def readFile(path, root=""):
