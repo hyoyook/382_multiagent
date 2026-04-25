@@ -66,15 +66,116 @@ class ReflexAgent(Agent):
         Print out these variables to see what you're getting, then combine them
         to create a masterful evaluation function.
         """
+        """
+        1. see the future
+        2. gather information
+        3. start with the base score 
+        4. closer to food -> bigger reward
+        5. closer to ghost -> BAD
+        6. penalize lots of remaining food
+        7. penalize stopping
+        """
+
         # Useful information you can extract from a GameState (pacman.py)
+
+        # -------------------------------------------------------
+        # 1. sucessor state: game state AFTER pacman takes 'action'
         successorGameState = currentGameState.generatePacmanSuccessor(action)
-        newPos = successorGameState.getPacmanPosition()
-        newFood = successorGameState.getFood()
+
+        # -------------------------------------------------------
+        # 2. info from successor state
+        # -------------------------------------------------------
+
+        newPos = successorGameState.getPacmanPosition()     # (x, y)
+        newFood = successorGameState.getFood()  # Ture: food at the pos
+
         newGhostStates = successorGameState.getGhostStates()
+
+        # scaredTimer > 0 : ghost is scared
+        # scaredTimer == 0: ghost is dangerous
         newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
 
-        "*** YOUR CODE HERE ***"
-        return successorGameState.getScore()
+        # -------------------------------------------------------
+        # 3. built in score
+        #   - Eating food:            +10
+        #   - Eating last food/win:   +500
+        #   - Dying:                  -500
+        #   - Eating scared ghost:    +200
+        #   - Every move penalty:     -1
+        #   - Scared duration:         40
+        # -------------------------------------------------------
+        score = successorGameState.getScore()
+
+        # -------------------------------------------------------
+        # 4. reward being closer to food
+        #   1 / distance:
+        #       dist = 1 -> +1.0    (close, big reward)
+        #       dist = 5 -> +0.2
+        #       dist =10 -> +0.1    (far, small reward)
+        # -------------------------------------------------------
+
+        foodList = newFood.asList() # list of (x,y) pos with food
+
+        if foodList:
+            # manhattan distance = |x2 - x1| + |y2 - y1|
+            nearestFood = min(
+                manhattanDistance(newPos, foodPos) for foodPos in foodList
+            )
+            if nearestFood > 0:
+                score += 1.0 / nearestFood
+
+
+        # -------------------------------------------------------
+        # 5. penalize being close to ghost,
+        #   bur reward if they are scared ghost
+        #   
+        #   - DANGER: scaredTimer == 0 
+        #   penalize before dying to steer pacman away
+        #  
+        #   - scared ghost: scaredTimer > 0
+        #   eating scared ghost = +200, move toward them!
+        # -------------------------------------------------------
+
+        for ghostState, scaredTime in zip(newGhostStates, newScaredTimes):
+
+            ghostPos = ghostState.getPosition()
+            dist     = manhattanDistance(newPos, ghostPos)
+
+            if scaredTime == 0:
+                # collision occurs at dist <= 0.7
+                
+                if dist <= 1:
+                    score -= 500    # basically too late to survive
+                elif dist <= 2:
+                    score -= 100    # very close
+                else:
+                    score -= 2.0 / dist # be aware but no need to be scared yet
+
+            else:
+                # ghost is SCARED 
+                # only chase if scared time is enough to reach it
+                if dist > 0 and scaredTime > dist:
+                    score += 200.0 / dist   # bigger reward when close
+                elif dist > 0:
+                    score == 1.0 / dist     # smaller reward even if it's risky
+
+        # -------------------------------------------------------
+        # 6. penalize if food leftover 
+        #  
+        #   fewer food remaining = win bonus
+        #   encourage eating as much as food
+        # -------------------------------------------------------
+
+        score -= 4 * len(foodList)
+
+        # -------------------------------------------------------
+        # 7. penalize stopping
+        # -------------------------------------------------------
+        
+        if action == Directions.STOP:
+            score -= 50
+
+        return score
 
 def scoreEvaluationFunction(currentGameState):
     """
