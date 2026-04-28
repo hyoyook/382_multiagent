@@ -480,8 +480,105 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         All ghosts should be modeled as choosing uniformly at random from their
         legal moves.
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # start at Pacman (agent0) with full depth
+        score, action = self.expectimax(
+            gameState,
+            agentIndex=0,
+            depth=self.depth
+        )
+
+        return action
+    
+    def expectimax(self, gameState, agentIndex, depth):
+        """
+        Decide which case applies at this node.
+        Returns (value, action)
+
+        Four cases:
+            1. terminal state:  eval immediately
+            2. depth exhausted: eval immediately (checked only when agentIndex == 0)
+            3. pacman's turn:   maxValue
+            4. ghost's turn:    expValue  (expected value over uniform random actions)
+        """
+        # case 1: terminal node, no action to return
+        if gameState.isWin() or gameState.isLose():
+            return self.evaluationFunction(gameState), None
+
+        # case 2: depth exhausted; only check when back at Pacman
+        if agentIndex == 0 and depth == 0:
+            return self.evaluationFunction(gameState), None
+
+        # case 3: pacman's turn. MAX node
+        if agentIndex == 0:
+            return self.maxValue(gameState, agentIndex, depth)
+
+        # case 4: ghost's turn. CHANCE node (uniform random)
+        else:
+            return self.expValue(gameState, agentIndex, depth)
+
+    def maxValue(self, gameState, agentIndex, depth):
+        # identical logic as MinimaxAgent.maxValue 
+        # but recurses into self.expectimax
+
+        bestScore = float('-inf')
+        bestAction = None
+    
+        nextAgent = 1
+
+        for action in gameState.getLegalActions(agentIndex):
+            successor = gameState.generateSuccessor(agentIndex, action)
+
+            score, _ = self.expectimax(successor, nextAgent, depth)
+
+            if score > bestScore:
+                bestScore = score
+                bestAction = action
+
+        return bestScore, bestAction
+
+
+    def expValue(self, gameState, agentIndex, depth):
+        """
+        Ghost's turn (CHANCE node):
+            Ghosts are chosen uniformly at random from legal actions
+            v = 0
+            p = 1 / len(legalActions) <- (uniform probability)
+            for each successor of state:
+                v += p * value(successor)
+            return v
+
+        No bestAction to track: chance nodes don't "choose", so we return None
+
+        Returns (expectedScore, None)
+        """
+        numAgents = gameState.getNumAgents()
+        lastGhost = (agentIndex == numAgents - 1)
+
+        if lastGhost:
+            nextAgent = 0
+            nextDepth = depth - 1
+        else:
+            nextAgent = agentIndex + 1
+            nextDepth = depth
+
+        legalActions = gameState.getLegalActions(agentIndex)
+
+        # uniform probability over all legal ghost actions
+        prob = 1.0 / len(legalActions)
+
+        expectedScore = 0.0
+
+        for action in legalActions:
+            successor = gameState.generateSuccessor(agentIndex, action)
+
+            score, _ = self.expectimax(successor, nextAgent, nextDepth)
+
+            # accumulate weighted contribution of each branch
+            expectedScore += prob * score
+
+        # chance nodes have NO single best action to return
+        return expectedScore, None
+    
 
 def betterEvaluationFunction(currentGameState):
     """
