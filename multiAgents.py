@@ -235,8 +235,105 @@ class MinimaxAgent(MultiAgentSearchAgent):
         gameState.isLose():
         Returns whether or not the game state is a losing state
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # start minimax at Pacman (agent 0) with full depth
+        # returns (score, action) -> score needed for search
+        score, action = self.minimax(gameState, agentIndex=0, depth=self.depth)
+        return action
+    
+    def minimax(self, gameState, agentIndex, depth):
+        """
+        decide which case applies at this node.
+        returns (value, action)
+
+        four cases:
+            1. terminal state:  eval immediately
+            2. depth exhausted: eval immediately
+            3. pacmans' turn:   maxValue
+            4. ghost's turn:    minValue
+        """
+
+        # case 1: terminal node, no action to return
+        if gameState.isWin() or gameState.isLose():
+            return self.evaluationFunction(gameState), None
+
+        # case 2: depth exhausted. only check when agenetIndex == 0
+        if agentIndex == 0 and depth == 0:
+            return self.evaluationFunction(gameState), None
+
+        # case 3: pacman's turn. MAX node. (pacman's agentIndex == 0)
+        if agentIndex == 0:
+            return self.maxValue(gameState, agentIndex, depth)
+        
+        # case 4: ghost's turn. MIN node.
+        else:
+            return self.minValue(gameState, agentIndex, depth)
+        
+    def maxValue(self, gameState, agentIndex, depth):
+        """
+        pacman's turn:
+            v = -inf
+            for each successor of state:
+                v = max(v, value(successor))
+            return v
+        Returns (bestScore, bestAction)
+        """
+        
+        bestScore = float('-inf')
+        bestAction = None
+        
+        # agentIndex = (agentIndex + 1) % numAgents
+        nextAgent = 1
+
+        for action in gameState.getLegalActions(agentIndex):
+            successor = gameState.generateSuccessor(agentIndex, action)
+
+            # depth stays the same until all ghosts move
+            score, _ = self.minimax(successor, nextAgent, depth)
+
+            if score > bestScore:
+                bestScore = score
+                bestAction = action
+    
+        return bestScore, bestAction
+
+    def minValue(self, gameState, agentIndex, depth):
+        """
+        ghost's turn:
+            v = +inf
+            for each successor of state:
+                v = min(v, value(successor))
+            return v
+
+        multiple min layers (one for each ghost) for each max layer
+
+        Returns (bestScore, bestAction)
+        """
+
+        bestScore = float('+inf')
+        bestAction = None
+
+        numAgents = gameState.getNumAgents()
+        lastGhost = (agentIndex == numAgents - 1)
+
+        if lastGhost:
+            # back to packman
+            nextAgent = 0
+            nextDepth = depth - 1
+        else:
+            nextAgent = agentIndex + 1
+            nextDepth = depth
+        
+        for action in gameState.getLegalActions(agentIndex):
+            successor = gameState.generateSuccessor(agentIndex, action)
+
+            score, _ = self.minimax(successor, nextAgent, nextDepth)
+
+            if score < bestScore:
+                bestScore  = score
+                bestAction = action
+
+        return bestScore, bestAction
+
 
 class AlphaBetaAgent(MultiAgentSearchAgent):
     """
