@@ -80,6 +80,7 @@ class ReflexAgent(Agent):
 
         # -------------------------------------------------------
         # 1. sucessor state: game state AFTER pacman takes 'action'
+        # -------------------------------------------------------
         successorGameState = currentGameState.generatePacmanSuccessor(action)
 
         # -------------------------------------------------------
@@ -585,10 +586,70 @@ def betterEvaluationFunction(currentGameState):
     Your extreme ghost-hunting, pellet-nabbing, food-gobbling, unstoppable
     evaluation function (question 5).
 
-    DESCRIPTION: <write something here so we know what you did>
+    DESCRIPTION:
+        linear combination of weighted features (5)
+
+        features:
+            1. current score        : cummulative baseline
+            2. closest foods        : reciprocal pulls pacman toward foods
+            3. remaining foods      : penalize uneaten food
+            4. remaining pellets    : penalized uneaten pellets
+            5. proximity of ghost   : continuous reciprocal penalty for active ghosts,
+                                      reward chasing scared ghost, but not when they are about to be un-scrared
     """
-    "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    
+    pos         = currentGameState.getPacmanPosition()
+    foodList    = currentGameState.getFood().asList()
+    ghostStates = currentGameState.getGhostStates()
+    capsules    = currentGameState.getCapsules()
+    
+    # -------------------------------------------------------
+    # 1. curr score (base) 
+    # -------------------------------------------------------
+    score = currentGameState.getScore()
+    
+    # -------------------------------------------------------
+    # 2. closest foods: reciprocal dist to closest food
+    # -------------------------------------------------------
+    if foodList:
+        closestFood = min(manhattanDistance(pos, food) for food in foodList)
+        score += 1.0 / closestFood
+
+    # -------------------------------------------------------
+    # 3. remaining food penalty (-4 / food)
+    #   encourages pacman to get clear all food
+    # -------------------------------------------------------  
+    score -= 4.0 * len(foodList)
+
+    # -------------------------------------------------------
+    # 4. remaining pellets (capsule) penalty (-4 / pellet)
+    # -------------------------------------------------------
+    score -= 4.0 * len(capsules)
+    
+    # -------------------------------------------------------
+    # 5. proximity of ghost
+    #   continuous reciprocal, magnitude scales with proximity
+    #   e.g., ghost at dist = 3 should be worse than dist = 7
+    # -------------------------------------------------------
+
+    for ghost in ghostStates:
+        dist = manhattanDistance(pos, ghost.getPosition())
+
+        if ghost.scaredTimer > 0:
+            # scared ghost: reward chasing, but scale by scaredTimer 
+            # so pacman doesn't chase a ghost about to unscared
+            # scaredTimer is normalize to ~[0,1]
+            timerWeight = ghost.scaredTimer / 40.0
+            score += timerWeight * (2.0 / (dist + 1))
+        else:
+            # active ghost: continuous penalty, the closer, the worse.
+            # -10 / (dist + 1) -> dist = 0 -> -10, dist = 4 -> -2
+            # add a hard cliff at dist <= 1 
+            score -= 10.0 / (dist + 1)
+            if dist <= 1:
+                score -= 500.0   # RIP instant death
+
+    return score
 
 # Abbreviation
 better = betterEvaluationFunction
